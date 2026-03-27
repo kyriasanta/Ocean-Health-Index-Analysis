@@ -1,0 +1,281 @@
+---
+title: "Final Project 2_Ocean Health Index Analysis"
+author: "Kyria Santa"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Introduction
+
+## Data Set Description
+
+This analysis uses the Ocean Health Index (OHI) dataset, which provides annua assessments of ocean health for over 200 coastal countries and territories from 2012 to 2024.The dataset includes: 
+
+* REF_AREA: Country/region code ("USA")
+
+* REF_AREA_LABEL: Full country/region name ("United States")
+
+* Yearly OHI scores: Numerical values (0-100 scale) for years 2012 through 2024
+
+The OHI score represents the overall health of marine systems, integrating ecological, social, and economic lenses. Higher OHIs indicate better ocean health.
+
+## Analysis Objectives
+
+1. Data Prep: Load and reshape the OHI data from wide to tidy format
+
+2. Descriptive Analysis: Identify top-performing and bottom-performing countries
+
+3. Trend Analysis: Visualize global and regional trends over time
+
+4. Comparative Analysis: Examine specific countries of interest
+
+# Data Loading
+```{r}
+# Installing and Loading Necessary Libraries
+install.packages("rmarkdown")
+install.packages("tidyverse")
+install.packages("knitr")
+install.packages("ggplot2")
+install.packages("kableExtra")
+library("tidyverse")
+library("knitr")
+library("ggplot2")
+library("kableExtra")
+library("rmarkdown")
+
+
+# Reading my CSV File
+ohi_data <- read.csv(file.path("..", "data", "ocean_health_index.csv"))
+
+# Viewing my Data
+head(ohi_data)
+```
+
+# Data Prep
+```{r}
+# Reshaping from wide to "tidy" format
+ohi_tidy <- ohi_data %>%
+  pivot_longer(
+    cols = X2012:X2024,
+    names_to = "Year",
+    values_to = "OHI_Score"
+  ) %>%
+  mutate(
+    Year = as.numeric(gsub("X", "", Year)),
+    OHI_Score = as.numeric(OHI_Score)
+  ) %>%
+  arrange(REF_AREA, Year)
+
+# Verifying this worked
+head(ohi_tidy)
+
+# Checking for Missing Values
+cat("\nMissing values in Year column:", sum(is.na(ohi_tidy$Year)))
+cat("\nMissing values in OHI_Score column:", sum(is.na(ohi_tidy$OHI_Score)))
+```
+
+
+# Analysis Results
+
+## Descriptive Statistics Table
+
+```{r}
+# Calculating Summary Statistics by Year
+yearly_summary <- ohi_tidy %>%
+  group_by(Year) %>%
+  summarize(
+    Mean_OHI = mean(OHI_Score, na.rm = TRUE),
+    Median_OHI = median(OHI_Score, na.rm = TRUE),
+    SD_OHI = sd(OHI_Score, na.rm = TRUE),
+    Min_OHI = min(OHI_Score, na.rm = TRUE),
+    Max_OHI = max(OHI_Score, na.rm = TRUE),
+    N_Countries = n_distinct(REF_AREA)
+  ) %>%
+  round(2)
+
+# Creating a table
+yearly_summary %>% 
+  kable(
+    caption = "Annual Summary Statistics of Ocean Health Index (2012-2024)",
+    col.names = c("Year", "Mean", "Median", "Std Dev", "Min", "Max", "N Countries")
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+# Table Description 
+
+The table above presents summary statistics of the Ocean Health Index across all countries for each year from 2012 to 2024. Key observations include: 
+
+* Global averages range from about 69 to 71 points, indicating moderate ocean health overall
+
+* Variability is consistent across years (st devs around 6-7 points)
+
+* Complete data: All years include scores for the same number of countries (194), suggesting no missing yearly data
+
+* 2023-2024 dip: The mean scores show a noticeable decrease in the most recent years, suggesting potential global declines in ocean health 
+
+# Top and Bottom Performing Countries (2024)
+
+```{r}
+# Finding top and bottom performers in 2024
+latest_year <- ohi_tidy %>%
+  filter(Year == 2024) %>%
+  arrange(desc(OHI_Score))
+
+top_10 <- latest_year %>%
+  slice_head(n = 10) %>%
+  select(Country = REF_AREA_LABEL, `2024 Score` = OHI_Score)
+
+bottom_10 <- latest_year %>%
+  slice_tail(n = 10) %>%
+  select(Country = REF_AREA_LABEL, `2024 Score` = OHI_Score)
+
+# Creating a combined comparison table
+comparison_df <- data.frame(
+  Rank = c(paste0("Top ", 1:10), paste0("Bottom ", 1:10)),
+  Country = c(top_10$Country, bottom_10$Country),
+  Score = c(top_10$`2024 Score`, bottom_10$`2024 Score`)
+)
+
+comparison_df %>%
+  kable(
+    caption = "Top and Bottom Performing Countries in Ocean Health (2024)",
+    col.names = c("Rank", "Country", "OHI Score")
+  ) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+# Data Visualization
+
+## Figure 1: Global OHI Trends Over Time
+```{r}
+# Creating a plot showing global trends
+global_avg <- ohi_tidy %>%
+  group_by(Year) %>%
+  summarize(
+    Global_Mean = mean(OHI_Score, na.rm = TRUE),
+    Lower_CI = Global_Mean - sd(OHI_Score, na.rm = TRUE)/sqrt(n()),
+    Upper_CI = Global_Mean + sd(OHI_Score, na.rm = TRUE)/sqrt(n())
+  )
+
+ggplot(global_avg, aes(x = Year, y = Global_Mean)) +
+  geom_line(color = "steelblue", linewidth = 1.5) +
+  geom_ribbon(aes(ymin = Lower_CI, ymax = Upper_CI),
+              alpha = 0.2, fill = "steelblue") +
+  geom_point(color = "darkblue", size = 3) +
+  labs(
+    title = "Figure 1: Global Ocean Health Index Trends (2012-2024)",
+    subtitle = "Mean Scores with 95% Confidence Intervals",
+    x = "Year",
+    y = "Ocean Health Index Score",
+    caption = "Data Source: Ocean Health Index (Kaggle)"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+    plot.subtitle = element_text(hjust = 0.5, size = 12),
+    axis.text = element_text(color = "black", size = 11),
+    axis.title = element_text(size = 12),
+    panel.grid.minor = element_blank(),
+    plot.caption = element_text(size = 10)
+  ) + 
+  scale_x_continuous(breaks = seq(2012, 2024, 2)) +
+  scale_y_continuous(limits = c(65, 75), breaks = seq(65, 75, 1))
+```
+
+# Figure Description
+
+Figure 1 shows the global average Ocean Health Index (OHI) from 2012 to 2024 with 95% confidence intervals. Key insights:
+
+1. Overall Trend: Global ocean health showed improvement from 2012 to 2020, reaching a peak around 71.5
+
+2. Recent Decline: A noticeable dip occurs between 2023-2024, suggesting potential environmental pressures or human influence
+
+3. Statistical Significance: The confidence intervals narrow over time, indicating more precise estimates in recent years
+
+4. Variability: The shaded area represents uncertainty; wider intervals in earlier years suggest more variable measurements 
+
+
+# Figure 2: Country-Specific Trends Comparison
+```{r}
+# Selecting countries for comparison
+selected_countries <- c("United States", "India", "China", "Sudan", "Syrian Arab Republic", "World")
+
+# Calculating global average for comparison
+global_trend <- ohi_tidy %>%
+  group_by(Year) %>%
+  summarize(OHI_Score = mean(OHI_Score, na.rm = TRUE)) %>%
+  mutate(REF_AREA_LABEL = "World")
+
+# Getting country trends
+country_trends <- ohi_tidy %>%
+  filter(REF_AREA_LABEL %in% selected_countries) %>%
+  select(REF_AREA_LABEL, Year, OHI_Score)
+
+# Combining with global average
+comparison_data <- bind_rows(country_trends, global_trend) %>%
+  mutate(Country = factor(REF_AREA_LABEL, levels = selected_countries))
+
+ggplot(comparison_data, aes(x = Year, y = OHI_Score, color = Country, group = Country)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2) +
+  labs(
+    title = "Figure 2: Ocean Health Index Trends: Selected Countries vs. Global Average",
+    x = "Year",
+    y = "Ocean Health Index Score",
+    color = "Country/Region",
+    caption = "Note: 'World' represents the global average score"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+    legend.position = "bottom",
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(size = 11),
+    axis.text = element_text(color = "black", size = 11),
+    axis.title = element_text(size = 12),
+    panel.grid.minor = element_blank(),
+    plot.caption = element_text(size = 10)
+  ) +
+  scale_x_continuous(breaks = seq(2012, 2024, 2)) +
+  scale_color_brewer(palette = "Set1") +
+  guides(color = guide_legend(nrow = 1))
+```
+
+# Figure Description
+
+Figure 2 compares OHI trends for five selected countries to the global average. Observations:
+
+1. Performance Variation: Countries shows diverse trajectories, with some consistently above (United States) or below (Syrian Arab Republic) the global average
+
+2. Convergence Patterns: Most countries show the 2023-2024 dip, suggesting a shared global occurrence
+
+3. Country-Specific Observations:
+* The Syrian Arab Republic shows a sharp improvement form 2019-2020, holds this improvement until 2021, but faces a sharp decline from 2022-2023
+
+* China shows steady improvement over time
+
+* United States shows a steady decline over time 
+
+4. Benchmark Use: The "World" line provides a useful reference for evaluating individual country performance
+
+# Conclusion
+
+This analysis demonstrates the use of the Ocean Health Index dataset for tracking marine ecosystem health over time. The reproducible pipeline developed here successfully:
+
+1. Processed raw data from wide to tidy format, adjusting for the X-prefixed year columns
+
+2. Generated descriptive statistics and formatted tables
+
+3. Created informative visualizations with proper formatting 
+
+4. Identified key trends, including the global peak in 2022 and following decline
+
+This R Markdown file ensures reproducibility, with all code, data transformations, and analyses documented in a single file. In the future, I could extend this analysis by adding more environmental or socioeconomic variables to better understand the drivers of ocean health changes. 
