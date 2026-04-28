@@ -1,5 +1,7 @@
 FROM rocker/verse:4.3.1
 
+RUN Rscript -e "install.packages('kableExtra', repos='https://cloud.r-project.org')"
+
 COPY . /project
 WORKDIR /project
 
