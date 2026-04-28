@@ -68,3 +68,22 @@ plot(pressure)
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+## Docker
+
+### Building the Docker Image
+```bash
+docker build -t kyriasanta/ocean-health-index .
+```
+DockerHub: https://hub.docker.com/r/kyriasanta/ocean-health-index
+
+### Generating the Report with Docker
+**Mac/Linux:**
+```bash
+make report/Ocean-Health-Index.html
+```
+**Windows (git bash):**
+```bash
+make report-windows
+```
+The report will appear in the `report/` folder.
